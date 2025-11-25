@@ -9,6 +9,9 @@ export default {
   theme: {
     extend: {
       colors: {
+        accent: "hsl(265, 85%, 60%)",
+        "accent-light": "hsl(265, 85%, 70%)",
+        "accent-dark": "hsl(265, 85%, 50%)",
         spotify: {
           green: "#1DB954",
           black: "#191414",

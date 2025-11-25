@@ -183,9 +183,9 @@ export default function Home() {
         return <Music2 className="w-5 h-5 animate-pulse" />;
       case "downloading":
       case "converting":
-        return <Download className="w-5 h-5 animate-bounce" />;
+        return <Download className="w-5 h-5" />;
       case "complete":
-        return <CheckCircle2 className="w-5 h-5 text-spotify-green" />;
+        return <CheckCircle2 className="w-5 h-5 text-accent" />;
       case "error":
         return <AlertCircle className="w-5 h-5 text-red-500" />;
       default:
@@ -197,9 +197,9 @@ export default function Home() {
     <main className="min-h-screen animated-bg relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-spotify-green/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-teal-500/5 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-accent/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-violet-500/5 rounded-full blur-3xl" />
       </div>
 
       <div className="relative z-10 container mx-auto px-4 py-12 min-h-screen flex flex-col items-center justify-center">
@@ -214,15 +214,12 @@ export default function Home() {
               animate={{ rotate: [0, 10, -10, 0] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <Music className="w-12 h-12 text-spotify-green" />
+              <Music className="w-12 h-12 text-accent" />
             </motion.div>
-            <h1 className="text-5xl md:text-6xl font-bold text-gradient">
-              Spotifydown
+            <h1 className="text-5xl md:text-6xl font-bold font-[family-name:var(--font-typewriter)]">
+              sonata.
             </h1>
           </div>
-          <p className="text-spotify-light text-lg max-w-md mx-auto">
-            Convert your favorite Spotify tracks to MP3 in seconds
-          </p>
         </motion.div>
 
         {/* Main Card */}
@@ -236,7 +233,7 @@ export default function Home() {
             {/* URL Input */}
             <div className="relative mb-6">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                <Sparkles className="w-5 h-5 text-spotify-green" />
+                <Sparkles className="w-5 h-5 text-accent" />
               </div>
               <input
                 type="text"
@@ -244,7 +241,7 @@ export default function Home() {
                 onChange={(e) => setSpotifyUrl(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && fetchTrackInfo()}
                 placeholder="Paste Spotify track URL here..."
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-spotify-light/50 focus:border-spotify-green/50 focus:bg-white/10 transition-all duration-300"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-spotify-light/50 focus:border-accent/50 focus:bg-white/10 transition-all duration-300"
                 disabled={status.stage !== "idle" && status.stage !== "error"}
               />
             </div>
@@ -256,7 +253,7 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 onClick={fetchTrackInfo}
                 disabled={!spotifyUrl || (status.stage !== "idle" && status.stage !== "error")}
-                className="w-full btn-shine bg-gradient-to-r from-spotify-green to-emerald-500 text-white font-semibold py-4 rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
+                className="w-full btn-shine bg-gradient-to-r from-accent to-purple-500 text-white font-semibold py-4 rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
               >
                 {status.stage === "fetching" ? (
                   <>
@@ -322,7 +319,7 @@ export default function Home() {
                           href={trackInfo.spotifyUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-spotify-green text-xs flex items-center gap-1 hover:underline"
+                          className="text-accent text-xs flex items-center gap-1 hover:underline"
                         >
                           Open in Spotify
                           <ExternalLink className="w-3 h-3" />
@@ -344,7 +341,7 @@ export default function Home() {
                           initial={{ width: 0 }}
                           animate={{ width: `${status.progress}%` }}
                           transition={{ duration: 0.3 }}
-                          className="h-full bg-gradient-to-r from-spotify-green to-emerald-400 rounded-full"
+                          className="h-full bg-gradient-to-r from-accent to-purple-400 rounded-full"
                         />
                       </div>
 
@@ -363,7 +360,7 @@ export default function Home() {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={startDownload}
-                        className="flex-1 btn-shine bg-gradient-to-r from-spotify-green to-emerald-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
+                        className="flex-1 btn-shine bg-gradient-to-r from-accent to-purple-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
                       >
                         <Download className="w-5 h-5" />
                         Download MP3
@@ -376,7 +373,7 @@ export default function Home() {
                         animate={{ scale: 1 }}
                         href={status.downloadUrl}
                         download={status.filename}
-                        className="flex-1 btn-shine bg-gradient-to-r from-spotify-green to-emerald-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
+                        className="flex-1 btn-shine bg-gradient-to-r from-accent to-purple-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-5 h-5" />
                         Save File
@@ -407,15 +404,12 @@ export default function Home() {
           transition={{ delay: 0.3 }}
           className="mt-12 text-center"
         >
-          <p className="text-spotify-light/40 text-sm">
-            For educational purposes only. Audio sourced from YouTube.
-          </p>
-          <div className="flex items-center justify-center gap-1 mt-2">
+          <div className="flex items-center justify-center gap-1">
             <div className="flex gap-1">
               {[...Array(4)].map((_, i) => (
                 <div
                   key={i}
-                  className="w-1 bg-spotify-green/60 rounded-full music-bar"
+                  className="w-1 bg-accent/60 rounded-full music-bar"
                   style={{ animationDelay: `${i * 0.15}s` }}
                 />
               ))}
