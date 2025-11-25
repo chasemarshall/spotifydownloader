@@ -143,26 +143,45 @@ async function downloadWithYtdlCore(
     // This requires the video ID to be found first
     const response = await fetch(searchUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
     });
     const html = await response.text();
 
-    // Extract first video ID from search results
-    const videoIdMatch = html.match(/\/watch\?v=([a-zA-Z0-9_-]{11})/);
-    if (!videoIdMatch) {
+    // Try multiple patterns to extract video ID
+    let videoId = null;
+    const patterns = [
+      /"videoId":"([a-zA-Z0-9_-]{11})"/,
+      /\/watch\?v=([a-zA-Z0-9_-]{11})/,
+      /"playabilityStatus":.*?"videoId":"([a-zA-Z0-9_-]{11})"/
+    ];
+
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match) {
+        videoId = match[1];
+        break;
+      }
+    }
+
+    if (!videoId) {
+      console.error("Could not find video ID in search results");
       return false;
     }
 
-    const videoId = videoIdMatch[1];
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
     onProgress(40, "Found video, starting download...");
 
-    // Download audio stream
+    // Download audio stream with better options
     const stream = ytdl.default(videoUrl, {
       filter: "audioonly",
       quality: "highestaudio",
+      requestOptions: {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+      }
     });
 
     const writeStream = fs.createWriteStream(outputPath.replace(".mp3", ".m4a"));
@@ -183,15 +202,18 @@ async function downloadWithYtdlCore(
         resolve(true);
       });
 
-      writeStream.on("error", () => {
+      writeStream.on("error", (err) => {
+        console.error("Write stream error:", err);
         resolve(false);
       });
 
-      stream.on("error", () => {
+      stream.on("error", (err) => {
+        console.error("Download stream error:", err);
         resolve(false);
       });
     });
-  } catch {
+  } catch (error) {
+    console.error("ytdl-core error:", error);
     return false;
   }
 }
@@ -314,7 +336,7 @@ export async function POST(request: NextRequest) {
             sendEvent(controller, {
               stage: "error",
               progress: 0,
-              message: "Download failed. For best results, install yt-dlp locally.",
+              message: "Download failed. YouTube blocked the request. Please try again or try a different track.",
             });
             controller.close();
             return;
