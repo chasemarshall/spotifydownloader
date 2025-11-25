@@ -125,8 +125,80 @@ async function downloadWithYtDlp(
   });
 }
 
-// Fallback download method using ytdl-core (currently unused, kept for potential future use)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function downloadWithPlayDl(
+  query: string,
+  outputPath: string,
+  onProgress: (progress: number, message: string) => void
+): Promise<boolean> {
+  try {
+    const play = await import("play-dl");
+    const fs = await import("fs");
+
+    onProgress(30, "Searching YouTube...");
+
+    // Search YouTube
+    const searchResults = await play.search(query, {
+      limit: 1,
+      source: { youtube: "video" }
+    });
+
+    if (!searchResults || searchResults.length === 0) {
+      return false;
+    }
+
+    const video = searchResults[0];
+    onProgress(40, "Found track! Starting download...");
+
+    // Get stream info
+    const stream = await play.stream(video.url);
+
+    const writeStream = fs.createWriteStream(outputPath);
+    stream.stream.pipe(writeStream);
+
+    let lastProgress = 40;
+
+    // Monitor progress
+    const progressInterval = setInterval(() => {
+      if (lastProgress < 90) {
+        lastProgress += 5;
+        onProgress(lastProgress, `Downloading... ${Math.round(lastProgress - 40)}%`);
+      }
+    }, 1000);
+
+    return new Promise((resolve) => {
+      writeStream.on("finish", () => {
+        clearInterval(progressInterval);
+        stream.stream.destroy();
+        resolve(true);
+      });
+
+      writeStream.on("error", (err) => {
+        clearInterval(progressInterval);
+        console.error("Write stream error:", err);
+        stream.stream.destroy();
+        resolve(false);
+      });
+
+      stream.stream.on("error", (err) => {
+        clearInterval(progressInterval);
+        console.error("Download stream error:", err);
+        resolve(false);
+      });
+
+      // Timeout after 2 minutes
+      setTimeout(() => {
+        clearInterval(progressInterval);
+        stream.stream.destroy();
+        writeStream.destroy();
+        resolve(false);
+      }, 120000);
+    });
+  } catch (error) {
+    console.error("play-dl error:", error);
+    return false;
+  }
+}
+
 async function downloadWithYtdlCore(
   query: string,
   outputPath: string,
@@ -139,16 +211,27 @@ async function downloadWithYtdlCore(
 
     onProgress(30, "Searching YouTube...");
 
-    // Search for video using ytdl's search
+    // Search for video using YouTube search
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 
     // For ytdl-core, we need a direct video URL, so we'll use a simple approach
     // This requires the video ID to be found first
     const response = await fetch(searchUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
       }
     });
+
+    if (!response.ok) {
+      throw new Error("YouTube search failed");
+    }
+
     const html = await response.text();
 
     // Try multiple patterns to extract video ID
@@ -176,13 +259,20 @@ async function downloadWithYtdlCore(
 
     onProgress(40, "Found video, starting download...");
 
+    // Create agent with cookies to avoid blocking
+    const agent = ytdl.createAgent(undefined, {
+      localAddress: undefined,
+    });
+
     // Download audio stream with better options
     const stream = ytdl.default(videoUrl, {
       filter: "audioonly",
       quality: "highestaudio",
+      agent,
       requestOptions: {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "en-US,en;q=0.9",
         }
       }
     });
@@ -211,9 +301,16 @@ async function downloadWithYtdlCore(
         console.error("Download stream error:", err);
         resolve(false);
       });
+
+      // Timeout after 2 minutes
+      setTimeout(() => {
+        stream.destroy();
+        writeStream.destroy();
+        resolve(false);
+      }, 120000);
     });
   } catch (error) {
-    console.error("ytdl-core error:", error);
+    console.error("Download error:", error);
     return false;
   }
 }
@@ -315,28 +412,49 @@ export async function POST(request: NextRequest) {
             filename: `${sanitizedTitle}.mp3`,
           });
         } else {
-          // Fallback to ytdl-core (serverless compatible but less reliable)
+          // Fallback methods for serverless environments
           sendEvent(controller, {
             stage: "searching",
             progress: 20,
-            message: "Searching for audio (using fallback method)...",
+            message: "Searching for audio...",
           });
 
-          const outputPath = join(tempDir, `${fileId}.m4a`);
+          let outputPath = join(tempDir, `${fileId}.webm`);
+          let success = false;
+          let fileFormat = "webm";
 
-          const success = await downloadWithYtdlCore(searchQuery, outputPath, (progress, message) => {
-            sendEvent(controller, {
-              stage: "downloading",
-              progress,
-              message,
+          // Try play-dl first (more reliable in serverless)
+          try {
+            success = await downloadWithPlayDl(searchQuery, outputPath, (progress, message) => {
+              sendEvent(controller, {
+                stage: "downloading",
+                progress,
+                message,
+              });
             });
-          });
+          } catch (error) {
+            console.error("play-dl failed, trying ytdl-core:", error);
+          }
+
+          // If play-dl failed, try ytdl-core
+          if (!success || !existsSync(outputPath)) {
+            outputPath = join(tempDir, `${fileId}.m4a`);
+            fileFormat = "m4a";
+
+            success = await downloadWithYtdlCore(searchQuery, outputPath, (progress, message) => {
+              sendEvent(controller, {
+                stage: "downloading",
+                progress,
+                message,
+              });
+            });
+          }
 
           if (!success || !existsSync(outputPath)) {
             sendEvent(controller, {
               stage: "error",
               progress: 0,
-              message: "Download failed. YouTube blocked the request. Please try again or try a different track.",
+              message: "Download failed. For best results, install yt-dlp locally or try a different track.",
             });
             controller.close();
             return;
@@ -350,7 +468,8 @@ export async function POST(request: NextRequest) {
 
           const fileBuffer = readFileSync(outputPath);
           const base64 = fileBuffer.toString("base64");
-          const dataUrl = `data:audio/mp4;base64,${base64}`;
+          const mimeType = fileFormat === "webm" ? "audio/webm" : "audio/mp4";
+          const dataUrl = `data:${mimeType};base64,${base64}`;
 
           try {
             unlinkSync(outputPath);
@@ -363,7 +482,7 @@ export async function POST(request: NextRequest) {
             progress: 100,
             message: "Download complete!",
             downloadUrl: dataUrl,
-            filename: `${sanitizedTitle}.m4a`,
+            filename: `${sanitizedTitle}.${fileFormat}`,
           });
         }
 
