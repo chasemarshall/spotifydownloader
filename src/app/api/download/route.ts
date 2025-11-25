@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { spawn, execSync } from "child_process";
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, readdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { randomUUID } from "crypto";
@@ -11,6 +11,7 @@ interface DownloadRequest {
   album: string;
   albumArt: string;
   duration: number;
+  spotifyUrl?: string;
 }
 
 function sendEvent(
@@ -27,6 +28,29 @@ function sendEvent(
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 }
 
+function getEnhancedPath(): string {
+  const homedir = require("os").homedir();
+  const pythonPaths = [
+    `${homedir}/Library/Python/3.9/bin`,
+    `${homedir}/Library/Python/3.10/bin`,
+    `${homedir}/Library/Python/3.11/bin`,
+    `${homedir}/Library/Python/3.12/bin`,
+    `${homedir}/.local/bin`,
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+  ];
+  return process.env.PATH + ":" + pythonPaths.join(":");
+}
+
+function isSpotDlAvailable(): boolean {
+  try {
+    execSync("which spotdl", { stdio: "ignore", env: { ...process.env, PATH: getEnhancedPath() } });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isYtDlpAvailable(): boolean {
   try {
     execSync("which yt-dlp", { stdio: "ignore" });
@@ -34,6 +58,85 @@ function isYtDlpAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+async function downloadWithSpotDl(
+  query: string,
+  outputDir: string,
+  onProgress: (progress: number, message: string) => void
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const args = [
+      query,
+      "--output", outputDir,
+      "--format", "mp3",
+      "--threads", "1",
+    ];
+
+    // Add Python bin paths to environment
+    const proc = spawn("spotdl", args, {
+      env: { ...process.env, PATH: getEnhancedPath() }
+    });
+    let lastProgress = 0;
+    let outputFile: string | null = null;
+
+    const parseProgress = (output: string) => {
+      // spotdl outputs progress like: "Downloading: 45%"
+      const progressMatch = output.match(/(\d+)%/);
+      if (progressMatch) {
+        const progress = Math.min(parseInt(progressMatch[1]), 100);
+        if (progress > lastProgress) {
+          lastProgress = progress;
+          const scaledProgress = 40 + (progress * 0.5);
+          onProgress(scaledProgress, `Downloading... ${progress}%`);
+        }
+      }
+
+      // Look for completed downloads
+      if (output.includes("Downloaded")) {
+        onProgress(90, "Download complete, finalizing...");
+      }
+    };
+
+    proc.stdout.on("data", (data) => {
+      const output = data.toString();
+      parseProgress(output);
+    });
+
+    proc.stderr.on("data", (data) => {
+      const output = data.toString();
+      parseProgress(output);
+    });
+
+    proc.on("close", (code) => {
+      if (code === 0) {
+        // Find the downloaded file
+        try {
+          const files = readdirSync(outputDir).filter(f => f.endsWith(".mp3"));
+          if (files.length > 0) {
+            outputFile = join(outputDir, files[0]);
+            resolve(outputFile);
+          } else {
+            resolve(null);
+          }
+        } catch {
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    });
+
+    proc.on("error", () => {
+      resolve(null);
+    });
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      proc.kill();
+      resolve(null);
+    }, 300000);
+  });
 }
 
 async function searchYouTube(query: string): Promise<string | null> {
@@ -198,58 +301,38 @@ async function downloadWithYtdlCore(
 
 export async function POST(request: NextRequest) {
   const body: DownloadRequest = await request.json();
-  const { title, artist } = body;
+  const { title, artist, spotifyUrl } = body;
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
         // Create temp directory
-        const tempDir = join(tmpdir(), "spotify-dl");
+        const tempDir = join(tmpdir(), "spotify-dl", randomUUID());
         if (!existsSync(tempDir)) {
           mkdirSync(tempDir, { recursive: true });
         }
 
-        const fileId = randomUUID();
         const sanitizedTitle = `${artist} - ${title}`.replace(/[^a-zA-Z0-9\s-]/g, "").slice(0, 100);
-        const searchQuery = `${artist} - ${title} audio`;
+        const searchQuery = spotifyUrl || `${artist} - ${title}`;
 
+        const useSpotDl = isSpotDlAvailable();
         const useYtDlp = isYtDlpAvailable();
 
-        if (useYtDlp) {
-          // Use yt-dlp (preferred method)
+        if (useSpotDl) {
+          // Use spotdl (BEST method - designed for Spotify)
           sendEvent(controller, {
             stage: "searching",
             progress: 20,
-            message: "Searching for audio on YouTube...",
+            message: "Finding best audio match...",
           });
-
-          let videoId = await searchYouTube(searchQuery);
-
-          if (!videoId) {
-            // Try alternative search
-            const altQuery = `${title} ${artist}`;
-            videoId = await searchYouTube(altQuery);
-
-            if (!videoId) {
-              sendEvent(controller, {
-                stage: "error",
-                progress: 0,
-                message: "Could not find this song on YouTube. Try a different track.",
-              });
-              controller.close();
-              return;
-            }
-          }
 
           sendEvent(controller, {
             stage: "downloading",
             progress: 40,
-            message: "Found track! Starting download...",
+            message: "Starting download...",
           });
 
-          const outputPath = join(tempDir, `${fileId}.mp3`);
-
-          const success = await downloadWithYtDlp(videoId, outputPath, (progress, message) => {
+          const outputPath = await downloadWithSpotDl(searchQuery, tempDir, (progress, message) => {
             sendEvent(controller, {
               stage: "downloading",
               progress,
@@ -257,7 +340,7 @@ export async function POST(request: NextRequest) {
             });
           });
 
-          if (!success || !existsSync(outputPath)) {
+          if (!outputPath || !existsSync(outputPath)) {
             sendEvent(controller, {
               stage: "error",
               progress: 0,
@@ -278,9 +361,99 @@ export async function POST(request: NextRequest) {
           const base64 = fileBuffer.toString("base64");
           const dataUrl = `data:audio/mpeg;base64,${base64}`;
 
+          // Clean up temp file and directory
+          try {
+            unlinkSync(outputPath);
+            // Try to remove the temp directory (will only succeed if empty)
+            try {
+              const fs = await import("fs/promises");
+              await fs.rmdir(tempDir);
+            } catch {
+              // Ignore if directory is not empty or other errors
+            }
+          } catch {
+            // Ignore cleanup errors
+          }
+
+          sendEvent(controller, {
+            stage: "complete",
+            progress: 100,
+            message: "Download complete!",
+            downloadUrl: dataUrl,
+            filename: `${sanitizedTitle}.mp3`,
+          });
+        } else if (useYtDlp) {
+          // Use yt-dlp (fallback method)
+          sendEvent(controller, {
+            stage: "searching",
+            progress: 20,
+            message: "Searching for audio on YouTube (fallback)...",
+          });
+
+          let videoId = await searchYouTube(searchQuery);
+
+          if (!videoId) {
+            // Try alternative search
+            const altQuery = `${title} ${artist}`;
+            videoId = await searchYouTube(altQuery);
+
+            if (!videoId) {
+              sendEvent(controller, {
+                stage: "error",
+                progress: 0,
+                message: "Could not find this song. Install spotdl for better results: pip install spotdl",
+              });
+              controller.close();
+              return;
+            }
+          }
+
+          sendEvent(controller, {
+            stage: "downloading",
+            progress: 40,
+            message: "Found track! Starting download...",
+          });
+
+          const outputPath = join(tempDir, `${sanitizedTitle}.mp3`);
+
+          const success = await downloadWithYtDlp(videoId, outputPath, (progress, message) => {
+            sendEvent(controller, {
+              stage: "downloading",
+              progress,
+              message,
+            });
+          });
+
+          if (!success || !existsSync(outputPath)) {
+            sendEvent(controller, {
+              stage: "error",
+              progress: 0,
+              message: "Failed to download audio. Install spotdl for better results: pip install spotdl",
+            });
+            controller.close();
+            return;
+          }
+
+          sendEvent(controller, {
+            stage: "converting",
+            progress: 95,
+            message: "Finalizing MP3 file...",
+          });
+
+          // Read the file and convert to base64 data URL
+          const fileBuffer = readFileSync(outputPath);
+          const base64 = fileBuffer.toString("base64");
+          const dataUrl = `data:audio/mpeg;base64,${base64}`;
+
           // Clean up temp file
           try {
             unlinkSync(outputPath);
+            try {
+              const fs = await import("fs/promises");
+              await fs.rmdir(tempDir);
+            } catch {
+              // Ignore
+            }
           } catch {
             // Ignore cleanup errors
           }
@@ -293,7 +466,16 @@ export async function POST(request: NextRequest) {
             filename: `${sanitizedTitle}.mp3`,
           });
         } else {
-          // Fallback to ytdl-core (serverless compatible but less reliable)
+          // Fallback to ytdl-core (last resort, least reliable)
+          sendEvent(controller, {
+            stage: "error",
+            progress: 0,
+            message: "No download tools available. Please install spotdl: pip install spotdl",
+          });
+          controller.close();
+          return;
+
+          /* Keeping this code for reference but disabling ytdl-core fallback
           sendEvent(controller, {
             stage: "searching",
             progress: 20,
@@ -343,6 +525,7 @@ export async function POST(request: NextRequest) {
             downloadUrl: dataUrl,
             filename: `${sanitizedTitle}.m4a`,
           });
+          */
         }
 
         controller.close();
