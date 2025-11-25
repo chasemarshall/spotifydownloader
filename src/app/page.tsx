@@ -307,7 +307,7 @@ export default function Home() {
             >
               <Music className="w-12 h-12 text-accent" />
             </motion.div>
-            <h1 className="text-5xl md:text-6xl font-bold font-[family-name:var(--font-typewriter)] text-gradient">
+            <h1 className="text-5xl md:text-6xl font-bold font-[family-name:var(--font-display)] text-gradient">
               sonata.
             </h1>
           </div>
