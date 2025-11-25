@@ -534,8 +534,17 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="mt-12 text-center"
+          className="mt-12 text-center space-y-3"
         >
+          <a
+            href="https://ko-fi.com/chasemarsh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-accent/50 transition-all text-sm text-white"
+          >
+            <span>☕</span>
+            <span>Buy me a coffee</span>
+          </a>
           <div className="flex items-center justify-center gap-1">
             <div className="flex gap-1">
               {[...Array(4)].map((_, i) => (
