@@ -24,17 +24,28 @@ interface TrackInfo {
   spotifyUrl: string;
 }
 
+interface PlaylistInfo {
+  id: string;
+  name: string;
+  description: string;
+  coverArt: string;
+  totalTracks: number;
+  tracks: TrackInfo[];
+}
+
 interface DownloadStatus {
   stage: "idle" | "fetching" | "searching" | "downloading" | "converting" | "complete" | "error";
   progress: number;
   message: string;
   downloadUrl?: string;
   filename?: string;
+  trackId?: string;
 }
 
 export default function Home() {
   const [spotifyUrl, setSpotifyUrl] = useState("");
   const [trackInfo, setTrackInfo] = useState<TrackInfo | null>(null);
+  const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null);
   const [status, setStatus] = useState<DownloadStatus>({
     stage: "idle",
     progress: 0,
@@ -42,7 +53,11 @@ export default function Home() {
   });
 
   const isValidSpotifyUrl = (url: string) => {
-    return /^https?:\/\/open\.spotify\.com\/track\/[a-zA-Z0-9]+/.test(url);
+    return /^https?:\/\/open\.spotify\.com\/(track|playlist)\/[a-zA-Z0-9]+/.test(url);
+  };
+
+  const isPlaylistUrl = (url: string) => {
+    return url.includes("/playlist/");
   };
 
   const fetchTrackInfo = useCallback(async () => {
@@ -52,20 +67,24 @@ export default function Home() {
       setStatus({
         stage: "error",
         progress: 0,
-        message: "Please enter a valid Spotify track URL",
+        message: "Please enter a valid Spotify track or playlist URL",
       });
       return;
     }
 
+    const isPlaylist = isPlaylistUrl(spotifyUrl);
+
     setStatus({
       stage: "fetching",
       progress: 10,
-      message: "Fetching track information...",
+      message: isPlaylist ? "Fetching playlist information..." : "Fetching track information...",
     });
     setTrackInfo(null);
+    setPlaylistInfo(null);
 
     try {
-      const response = await fetch("/api/track", {
+      const endpoint = isPlaylist ? "/api/playlist" : "/api/track";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: spotifyUrl }),
@@ -74,10 +93,15 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch track info");
+        throw new Error(data.error || `Failed to fetch ${isPlaylist ? "playlist" : "track"} info`);
       }
 
-      setTrackInfo(data);
+      if (isPlaylist) {
+        setPlaylistInfo(data);
+      } else {
+        setTrackInfo(data);
+      }
+
       setStatus({
         stage: "idle",
         progress: 0,
@@ -87,18 +111,19 @@ export default function Home() {
       setStatus({
         stage: "error",
         progress: 0,
-        message: error instanceof Error ? error.message : "Failed to fetch track info",
+        message: error instanceof Error ? error.message : "Failed to fetch info",
       });
     }
   }, [spotifyUrl]);
 
-  const startDownload = useCallback(async () => {
-    if (!trackInfo) return;
+  const startDownload = useCallback(async (track: TrackInfo) => {
+    if (!track) return;
 
     setStatus({
       stage: "searching",
       progress: 20,
       message: "Searching for audio source...",
+      trackId: track.id,
     });
 
     try {
@@ -106,11 +131,11 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: trackInfo.title,
-          artist: trackInfo.artist,
-          album: trackInfo.album,
-          albumArt: trackInfo.albumArt,
-          duration: trackInfo.duration,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          albumArt: track.albumArt,
+          duration: track.duration,
         }),
       });
 
@@ -141,13 +166,14 @@ export default function Home() {
               throw new Error(data.message);
             }
 
-            setStatus({
+            setStatus((prev) => ({
               stage: data.stage,
               progress: data.progress,
               message: data.message,
               downloadUrl: data.downloadUrl,
               filename: data.filename,
-            });
+              trackId: prev.trackId,
+            }));
           } catch (e) {
             if (e instanceof SyntaxError) continue;
             throw e;
@@ -161,11 +187,12 @@ export default function Home() {
         message: error instanceof Error ? error.message : "Download failed",
       });
     }
-  }, [trackInfo]);
+  }, []);
 
   const resetState = () => {
     setSpotifyUrl("");
     setTrackInfo(null);
+    setPlaylistInfo(null);
     setStatus({ stage: "idle", progress: 0, message: "" });
   };
 
@@ -216,7 +243,7 @@ export default function Home() {
             >
               <Music className="w-12 h-12 text-accent" />
             </motion.div>
-            <h1 className="text-5xl md:text-6xl font-bold font-[family-name:var(--font-typewriter)]">
+            <h1 className="text-5xl md:text-6xl font-bold font-[family-name:var(--font-typewriter)] text-gradient">
               sonata.
             </h1>
           </div>
@@ -247,7 +274,7 @@ export default function Home() {
             </div>
 
             {/* Fetch Button */}
-            {!trackInfo && (
+            {!trackInfo && !playlistInfo && (
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -263,7 +290,7 @@ export default function Home() {
                 ) : (
                   <>
                     <Music className="w-5 h-5" />
-                    Get Track Info
+                    Get Info
                   </>
                 )}
               </motion.button>
@@ -359,7 +386,7 @@ export default function Home() {
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={startDownload}
+                        onClick={() => startDownload(trackInfo)}
                         className="flex-1 btn-shine bg-gradient-to-r from-accent to-purple-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
                       >
                         <Download className="w-5 h-5" />
@@ -390,6 +417,111 @@ export default function Home() {
                         New
                       </motion.button>
                     )}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Playlist Info Card */}
+              {playlistInfo && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="mt-6"
+                >
+                  {/* Playlist Header */}
+                  <div className="flex gap-4 p-4 bg-white/5 rounded-2xl border border-white/10 mb-4">
+                    <div className="relative w-24 h-24 flex-shrink-0">
+                      <Image
+                        src={playlistInfo.coverArt}
+                        alt={playlistInfo.name}
+                        fill
+                        className="object-cover rounded-xl"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-white font-semibold text-lg truncate">
+                        {playlistInfo.name}
+                      </h3>
+                      <p className="text-spotify-light text-sm truncate">
+                        {playlistInfo.totalTracks} tracks
+                      </p>
+                      {playlistInfo.description && (
+                        <p className="text-spotify-light/60 text-xs mt-1 line-clamp-2">
+                          {playlistInfo.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Playlist Tracks */}
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {playlistInfo.tracks.map((track, index) => (
+                      <motion.div
+                        key={track.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
+                      >
+                        <div className="relative w-12 h-12 flex-shrink-0">
+                          <Image
+                            src={track.albumArt}
+                            alt={track.album}
+                            fill
+                            className="object-cover rounded-lg"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium truncate">
+                            {track.title}
+                          </p>
+                          <p className="text-spotify-light text-xs truncate">
+                            {track.artist}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-spotify-light/60 text-xs">
+                            {formatDuration(track.duration)}
+                          </span>
+                          {status.trackId === track.id && status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error" ? (
+                            <div className="w-8 h-8 flex items-center justify-center">
+                              <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                            </div>
+                          ) : status.trackId === track.id && status.stage === "complete" && status.downloadUrl ? (
+                            <motion.a
+                              initial={{ scale: 0.8 }}
+                              animate={{ scale: 1 }}
+                              href={status.downloadUrl}
+                              download={status.filename}
+                              className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors"
+                            >
+                              <CheckCircle2 className="w-4 h-4 text-accent" />
+                            </motion.a>
+                          ) : (
+                            <button
+                              onClick={() => startDownload(track)}
+                              disabled={status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error"}
+                              className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Download className="w-4 h-4 text-accent" />
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* New Button */}
+                  <div className="mt-4">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={resetState}
+                      className="w-full px-6 py-3 border border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
+                    >
+                      New
+                    </motion.button>
                   </div>
                 </motion.div>
               )}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Special_Elite } from "next/font/google";
+import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -7,8 +7,7 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-const specialElite = Special_Elite({
-  weight: "400",
+const robotoMono = Roboto_Mono({
   subsets: ["latin"],
   variable: "--font-typewriter",
 });
@@ -26,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${specialElite.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${robotoMono.variable} font-sans antialiased`}>
         {children}
       </body>
     </html>
