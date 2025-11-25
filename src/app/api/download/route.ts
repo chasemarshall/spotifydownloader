@@ -29,6 +29,7 @@ function sendEvent(
 
 function isYtDlpAvailable(): boolean {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     execSync("which yt-dlp", { stdio: "ignore" });
     return true;
   } catch {
@@ -124,6 +125,8 @@ async function downloadWithYtDlp(
   });
 }
 
+// Fallback download method using ytdl-core (currently unused, kept for potential future use)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function downloadWithYtdlCore(
   query: string,
   outputPath: string,
@@ -186,10 +189,7 @@ async function downloadWithYtdlCore(
 
     const writeStream = fs.createWriteStream(outputPath.replace(".mp3", ".m4a"));
 
-    let downloadedBytes = 0;
-
     stream.on("progress", (_, downloaded, total) => {
-      downloadedBytes = downloaded;
       const percent = (downloaded / total) * 100;
       const scaledProgress = 40 + (percent * 0.5);
       onProgress(scaledProgress, `Downloading... ${Math.round(percent)}%`);
