@@ -11,6 +11,7 @@ import {
   Loader2,
   ExternalLink,
   Music2,
+  Archive,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -51,6 +52,7 @@ export default function Home() {
     progress: 0,
     message: "",
   });
+  const [downloadedTracks, setDownloadedTracks] = useState<Map<string, { blob: Blob; filename: string }>>(new Map());
 
   const isValidSpotifyUrl = (url: string) => {
     return /^https?:\/\/open\.spotify\.com\/(track|playlist)\/[a-zA-Z0-9]+/.test(url);
@@ -174,6 +176,20 @@ export default function Home() {
               filename: data.filename,
               trackId: prev.trackId,
             }));
+
+            // Store the downloaded track blob for ZIP creation
+            if (data.stage === "complete" && data.downloadUrl && data.filename && track.id) {
+              fetch(data.downloadUrl)
+                .then(res => res.blob())
+                .then(blob => {
+                  setDownloadedTracks(prev => {
+                    const newMap = new Map(prev);
+                    newMap.set(track.id, { blob, filename: data.filename! });
+                    return newMap;
+                  });
+                })
+                .catch(console.error);
+            }
           } catch (e) {
             if (e instanceof SyntaxError) continue;
             throw e;
@@ -194,6 +210,54 @@ export default function Home() {
     setTrackInfo(null);
     setPlaylistInfo(null);
     setStatus({ stage: "idle", progress: 0, message: "" });
+    setDownloadedTracks(new Map());
+  };
+
+  const downloadAllAsZip = async () => {
+    if (!playlistInfo || downloadedTracks.size === 0) {
+      setStatus({
+        stage: "error",
+        progress: 0,
+        message: "Please download at least one track before creating a ZIP",
+      });
+      return;
+    }
+
+    try {
+      // Dynamic import of JSZip
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      // Add all downloaded tracks to the ZIP
+      downloadedTracks.forEach((trackData, trackId) => {
+        zip.file(trackData.filename, trackData.blob);
+      });
+
+      // Generate the ZIP file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      // Create download link
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${playlistInfo.name.replace(/[^a-z0-9]/gi, '_')}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setStatus({
+        stage: "complete",
+        progress: 100,
+        message: "ZIP file downloaded successfully",
+      });
+    } catch (error) {
+      setStatus({
+        stage: "error",
+        progress: 0,
+        message: error instanceof Error ? error.message : "Failed to create ZIP",
+      });
+    }
   };
 
   const formatDuration = (ms: number) => {
@@ -454,75 +518,86 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Playlist Tracks */}
-                  <div className="relative">
-                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-3 pb-12 playlist-scroll">
-                      {playlistInfo.tracks.map((track, index) => (
-                        <motion.div
-                          key={track.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
-                        >
-                          <div className="relative w-12 h-12 flex-shrink-0">
-                            <Image
-                              src={track.albumArt}
-                              alt={track.album}
-                              fill
-                              className="object-cover rounded-lg"
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm font-medium truncate">
-                              {track.title}
-                            </p>
-                            <p className="text-spotify-light text-xs truncate">
-                              {track.artist}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-spotify-light/60 text-xs">
-                              {formatDuration(track.duration)}
-                            </span>
-                            {status.trackId === track.id && status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error" ? (
-                              <div className="w-8 h-8 flex items-center justify-center">
-                                <Loader2 className="w-4 h-4 animate-spin text-accent" />
-                              </div>
-                            ) : status.trackId === track.id && status.stage === "complete" && status.downloadUrl ? (
-                              <motion.a
-                                initial={{ scale: 0.8 }}
-                                animate={{ scale: 1 }}
-                                href={status.downloadUrl}
-                                download={status.filename}
-                                className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors"
-                              >
-                                <CheckCircle2 className="w-4 h-4 text-accent" />
-                              </motion.a>
-                            ) : (
-                              <button
-                                onClick={() => startDownload(track)}
-                                disabled={status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error"}
-                                className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <Download className="w-4 h-4 text-accent" />
-                              </button>
-                            )}
-                          </div>
-                        </motion.div>
-                      ))}
+                  {/* Playlist Tracks - Centered with soft edges */}
+                  <div className="flex flex-col items-center justify-center min-h-[300px]">
+                    <div className="w-full bg-white/5 rounded-2xl border border-white/10 p-6 max-h-[500px] overflow-hidden">
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto playlist-scroll px-2">
+                        {playlistInfo.tracks.map((track, index) => (
+                          <motion.div
+                            key={track.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
+                          >
+                            <div className="relative w-12 h-12 flex-shrink-0">
+                              <Image
+                                src={track.albumArt}
+                                alt={track.album}
+                                fill
+                                className="object-cover rounded-lg"
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-medium truncate">
+                                {track.title}
+                              </p>
+                              <p className="text-spotify-light text-xs truncate">
+                                {track.artist}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-spotify-light/60 text-xs">
+                                {formatDuration(track.duration)}
+                              </span>
+                              {status.trackId === track.id && status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error" ? (
+                                <div className="w-8 h-8 flex items-center justify-center">
+                                  <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                                </div>
+                              ) : status.trackId === track.id && status.stage === "complete" && status.downloadUrl ? (
+                                <motion.a
+                                  initial={{ scale: 0.8 }}
+                                  animate={{ scale: 1 }}
+                                  href={status.downloadUrl}
+                                  download={status.filename}
+                                  className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors"
+                                >
+                                  <CheckCircle2 className="w-4 h-4 text-accent" />
+                                </motion.a>
+                              ) : (
+                                <button
+                                  onClick={() => startDownload(track)}
+                                  disabled={status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error"}
+                                  className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  <Download className="w-4 h-4 text-accent" />
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
                     </div>
-                    {/* Fade gradient at bottom */}
-                    <div className="absolute bottom-0 left-0 right-3 h-16 bg-gradient-to-t from-[#0d0d0d] to-transparent pointer-events-none" />
                   </div>
 
-                  {/* New Button */}
-                  <div className="mt-4">
+                  {/* Action Buttons */}
+                  <div className="mt-4 flex gap-3">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={downloadAllAsZip}
+                      disabled={downloadedTracks.size === 0}
+                      className="flex-1 btn-shine bg-gradient-to-r from-accent to-purple-500 text-white font-semibold py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
+                    >
+                      <Archive className="w-5 h-5" />
+                      download all ({downloadedTracks.size}/{playlistInfo.totalTracks})
+                    </motion.button>
+
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={resetState}
-                      className="w-full px-6 py-3 border border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors lowercase"
+                      className="px-6 py-3 border border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
                     >
                       new
                     </motion.button>

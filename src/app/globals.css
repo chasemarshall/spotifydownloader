@@ -62,22 +62,14 @@ body {
   background: hsl(265, 85%, 60%, 0.7);
 }
 
-/* Playlist scrollbar - thinner and doesn't overlap content */
+/* Playlist scrollbar - hidden but functional */
+.playlist-scroll {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
 .playlist-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-
-.playlist-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.playlist-scroll::-webkit-scrollbar-thumb {
-  background: hsl(265, 85%, 60%, 0.3);
-  border-radius: 2px;
-}
-
-.playlist-scroll::-webkit-scrollbar-thumb:hover {
-  background: hsl(265, 85%, 60%, 0.5);
+  display: none; /* Chrome, Safari, Opera */
 }
 
 /* Animated background */
