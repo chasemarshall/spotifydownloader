@@ -138,6 +138,7 @@ export default function Home() {
           album: track.album,
           albumArt: track.albumArt,
           duration: track.duration,
+          spotifyUrl: track.spotifyUrl,
         }),
       });
 
