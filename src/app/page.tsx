@@ -267,7 +267,7 @@ export default function Home() {
                 value={spotifyUrl}
                 onChange={(e) => setSpotifyUrl(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && fetchTrackInfo()}
-                placeholder="Paste Spotify track URL here..."
+                placeholder="paste spotify track url here..."
                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-spotify-light/50 focus:border-accent/50 focus:bg-white/10 transition-all duration-300"
                 disabled={status.stage !== "idle" && status.stage !== "error"}
               />
@@ -285,12 +285,12 @@ export default function Home() {
                 {status.stage === "fetching" ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Fetching...
+                    fetching...
                   </>
                 ) : (
                   <>
                     <Music className="w-5 h-5" />
-                    Get Info
+                    get info
                   </>
                 )}
               </motion.button>
@@ -348,7 +348,7 @@ export default function Home() {
                           rel="noopener noreferrer"
                           className="text-accent text-xs flex items-center gap-1 hover:underline"
                         >
-                          Open in Spotify
+                          open in spotify
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
@@ -390,7 +390,7 @@ export default function Home() {
                         className="flex-1 btn-shine bg-gradient-to-r from-accent to-purple-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
                       >
                         <Download className="w-5 h-5" />
-                        Download MP3
+                        download mp3
                       </motion.button>
                     )}
 
@@ -403,7 +403,7 @@ export default function Home() {
                         className="flex-1 btn-shine bg-gradient-to-r from-accent to-purple-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-5 h-5" />
-                        Save File
+                        save file
                       </motion.a>
                     )}
 
@@ -414,7 +414,7 @@ export default function Home() {
                         onClick={resetState}
                         className="px-6 py-3 border border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
                       >
-                        New
+                        new
                       </motion.button>
                     )}
                   </div>
@@ -455,61 +455,65 @@ export default function Home() {
                   </div>
 
                   {/* Playlist Tracks */}
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {playlistInfo.tracks.map((track, index) => (
-                      <motion.div
-                        key={track.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
-                      >
-                        <div className="relative w-12 h-12 flex-shrink-0">
-                          <Image
-                            src={track.albumArt}
-                            alt={track.album}
-                            fill
-                            className="object-cover rounded-lg"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium truncate">
-                            {track.title}
-                          </p>
-                          <p className="text-spotify-light text-xs truncate">
-                            {track.artist}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-spotify-light/60 text-xs">
-                            {formatDuration(track.duration)}
-                          </span>
-                          {status.trackId === track.id && status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error" ? (
-                            <div className="w-8 h-8 flex items-center justify-center">
-                              <Loader2 className="w-4 h-4 animate-spin text-accent" />
-                            </div>
-                          ) : status.trackId === track.id && status.stage === "complete" && status.downloadUrl ? (
-                            <motion.a
-                              initial={{ scale: 0.8 }}
-                              animate={{ scale: 1 }}
-                              href={status.downloadUrl}
-                              download={status.filename}
-                              className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors"
-                            >
-                              <CheckCircle2 className="w-4 h-4 text-accent" />
-                            </motion.a>
-                          ) : (
-                            <button
-                              onClick={() => startDownload(track)}
-                              disabled={status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error"}
-                              className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <Download className="w-4 h-4 text-accent" />
-                            </button>
-                          )}
-                        </div>
-                      </motion.div>
-                    ))}
+                  <div className="relative">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-3 pb-12 playlist-scroll">
+                      {playlistInfo.tracks.map((track, index) => (
+                        <motion.div
+                          key={track.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors"
+                        >
+                          <div className="relative w-12 h-12 flex-shrink-0">
+                            <Image
+                              src={track.albumArt}
+                              alt={track.album}
+                              fill
+                              className="object-cover rounded-lg"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-medium truncate">
+                              {track.title}
+                            </p>
+                            <p className="text-spotify-light text-xs truncate">
+                              {track.artist}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-spotify-light/60 text-xs">
+                              {formatDuration(track.duration)}
+                            </span>
+                            {status.trackId === track.id && status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error" ? (
+                              <div className="w-8 h-8 flex items-center justify-center">
+                                <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                              </div>
+                            ) : status.trackId === track.id && status.stage === "complete" && status.downloadUrl ? (
+                              <motion.a
+                                initial={{ scale: 0.8 }}
+                                animate={{ scale: 1 }}
+                                href={status.downloadUrl}
+                                download={status.filename}
+                                className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors"
+                              >
+                                <CheckCircle2 className="w-4 h-4 text-accent" />
+                              </motion.a>
+                            ) : (
+                              <button
+                                onClick={() => startDownload(track)}
+                                disabled={status.stage !== "idle" && status.stage !== "complete" && status.stage !== "error"}
+                                className="w-8 h-8 flex items-center justify-center bg-accent/20 rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <Download className="w-4 h-4 text-accent" />
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                    {/* Fade gradient at bottom */}
+                    <div className="absolute bottom-0 left-0 right-3 h-16 bg-gradient-to-t from-[#0d0d0d] to-transparent pointer-events-none" />
                   </div>
 
                   {/* New Button */}
@@ -518,9 +522,9 @@ export default function Home() {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={resetState}
-                      className="w-full px-6 py-3 border border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors"
+                      className="w-full px-6 py-3 border border-white/20 text-white rounded-xl hover:bg-white/10 transition-colors lowercase"
                     >
-                      New
+                      new
                     </motion.button>
                   </div>
                 </motion.div>
@@ -540,10 +544,10 @@ export default function Home() {
             href="https://ko-fi.com/chasemarsh"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-accent/50 transition-all text-sm text-white"
+            className="group inline-flex items-center gap-0 hover:gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 hover:border-accent/50 transition-all duration-300 text-sm text-white"
           >
             <span>☕</span>
-            <span>Buy me a coffee</span>
+            <span className="max-w-0 overflow-hidden group-hover:max-w-[150px] transition-all duration-300 whitespace-nowrap">buy me a coffee</span>
           </a>
           <div className="flex items-center justify-center gap-1">
             <div className="flex gap-1">
