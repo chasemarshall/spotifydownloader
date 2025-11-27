@@ -29,7 +29,6 @@ function sendEvent(
 
 function isYtDlpAvailable(): boolean {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     execSync("which yt-dlp", { stdio: "ignore" });
     return true;
   } catch {

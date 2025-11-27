@@ -153,47 +153,63 @@ export default function Home() {
         throw new Error("Failed to start download stream");
       }
 
+      let buffer = "";
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n").filter((line) => line.startsWith("data: "));
+        let eventBoundary = buffer.indexOf("\n\n");
+        while (eventBoundary !== -1) {
+          const rawEvent = buffer.slice(0, eventBoundary).trim();
+          buffer = buffer.slice(eventBoundary + 2);
 
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line.slice(6));
+          const dataLines = rawEvent
+            .split("\n")
+            .filter((line) => line.startsWith("data: "));
 
-            if (data.stage === "error") {
-              throw new Error(data.message);
+          for (const line of dataLines) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.stage === "error") {
+                throw new Error(data.message);
+              }
+
+              setStatus((prev) => ({
+                stage: data.stage,
+                progress: data.progress,
+                message: data.message,
+                downloadUrl: data.downloadUrl,
+                filename: data.filename,
+                trackId: prev.trackId,
+              }));
+
+              // Store the downloaded track blob for ZIP creation
+              if (data.stage === "complete" && data.downloadUrl && data.filename && track.id) {
+                fetch(data.downloadUrl)
+                  .then(res => res.blob())
+                  .then(blob => {
+                    setDownloadedTracks(prev => {
+                      const newMap = new Map(prev);
+                      newMap.set(track.id, { blob, filename: data.filename! });
+                      return newMap;
+                    });
+                  })
+                  .catch(console.error);
+              }
+            } catch (e) {
+              if (e instanceof SyntaxError) continue;
+              throw e;
             }
-
-            setStatus((prev) => ({
-              stage: data.stage,
-              progress: data.progress,
-              message: data.message,
-              downloadUrl: data.downloadUrl,
-              filename: data.filename,
-              trackId: prev.trackId,
-            }));
-
-            // Store the downloaded track blob for ZIP creation
-            if (data.stage === "complete" && data.downloadUrl && data.filename && track.id) {
-              fetch(data.downloadUrl)
-                .then(res => res.blob())
-                .then(blob => {
-                  setDownloadedTracks(prev => {
-                    const newMap = new Map(prev);
-                    newMap.set(track.id, { blob, filename: data.filename! });
-                    return newMap;
-                  });
-                })
-                .catch(console.error);
-            }
-          } catch (e) {
-            if (e instanceof SyntaxError) continue;
-            throw e;
           }
+
+          eventBoundary = buffer.indexOf("\n\n");
+        }
+
+        if (done) {
+          buffer = "";
+          break;
         }
       }
     } catch (error) {
@@ -229,7 +245,7 @@ export default function Home() {
       const zip = new JSZip();
 
       // Add all downloaded tracks to the ZIP
-      downloadedTracks.forEach((trackData, trackId) => {
+      downloadedTracks.forEach((trackData) => {
         zip.file(trackData.filename, trackData.blob);
       });
 
