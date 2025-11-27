@@ -27,6 +27,15 @@ function sendEvent(
   controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 }
 
+function isSpotDlAvailable(): boolean {
+  try {
+    execSync("which spotdl", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isYtDlpAvailable(): boolean {
   try {
     execSync("which yt-dlp", { stdio: "ignore" });
@@ -34,6 +43,76 @@ function isYtDlpAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+async function downloadWithSpotDl(
+  query: string,
+  outputPath: string,
+  onProgress: (progress: number, message: string) => void
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    // spotDL command: spotdl "song query" --output "{artist} - {title}.{output-ext}"
+    const args = [
+      query,
+      "--output", outputPath,
+      "--format", "mp3",
+      "--bitrate", "320k",
+      "--threads", "1",
+    ];
+
+    const proc = spawn("spotdl", args);
+    let lastProgress = 0;
+
+    const parseProgress = (output: string) => {
+      // spotDL outputs progress like: "Downloading: 45%"
+      const progressMatch = output.match(/(\d+)%/);
+      if (progressMatch) {
+        const progress = Math.min(parseInt(progressMatch[1]), 100);
+        if (progress > lastProgress) {
+          lastProgress = progress;
+          const scaledProgress = 30 + (progress * 0.65);
+          onProgress(scaledProgress, `Downloading... ${progress}%`);
+        }
+      }
+
+      // Check for different stages
+      if (output.includes("Searching")) {
+        onProgress(20, "Searching YouTube...");
+      } else if (output.includes("Downloading")) {
+        onProgress(30, "Downloading audio...");
+      } else if (output.includes("Converting") || output.includes("Processing")) {
+        onProgress(90, "Converting to MP3...");
+      }
+    };
+
+    proc.stdout.on("data", (data) => {
+      const output = data.toString();
+      console.log("spotdl stdout:", output);
+      parseProgress(output);
+    });
+
+    proc.stderr.on("data", (data) => {
+      const output = data.toString();
+      console.log("spotdl stderr:", output);
+      parseProgress(output);
+    });
+
+    proc.on("close", (code) => {
+      console.log("spotdl exited with code:", code);
+      resolve(code === 0);
+    });
+
+    proc.on("error", (err) => {
+      console.error("spotdl error:", err);
+      resolve(false);
+    });
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      proc.kill();
+      resolve(false);
+    }, 300000);
+  });
 }
 
 async function searchYouTube(query: string): Promise<string | null> {
@@ -329,19 +408,72 @@ export async function POST(request: NextRequest) {
 
         const fileId = randomUUID();
         const sanitizedTitle = `${artist} - ${title}`.replace(/[^a-zA-Z0-9\s-]/g, "").slice(0, 100);
-        const searchQuery = `${artist} - ${title} audio`;
+        const searchQuery = `${artist} - ${title}`;
 
+        const useSpotDl = isSpotDlAvailable();
         const useYtDlp = isYtDlpAvailable();
 
+        if (useSpotDl) {
+          // Use spotDL (BEST - preferred method)
+          sendEvent(controller, {
+            stage: "searching",
+            progress: 10,
+            message: "Searching for track using spotDL...",
+          });
+
+          const outputPath = join(tempDir, `${fileId}.mp3`);
+
+          const success = await downloadWithSpotDl(searchQuery, outputPath, (progress, message) => {
+            sendEvent(controller, {
+              stage: "downloading",
+              progress,
+              message,
+            });
+          });
+
+          if (success && existsSync(outputPath)) {
+            sendEvent(controller, {
+              stage: "converting",
+              progress: 95,
+              message: "Finalizing MP3 file...",
+            });
+
+            // Read the file and convert to base64 data URL
+            const fileBuffer = readFileSync(outputPath);
+            const base64 = fileBuffer.toString("base64");
+            const dataUrl = `data:audio/mpeg;base64,${base64}`;
+
+            // Clean up temp file
+            try {
+              unlinkSync(outputPath);
+            } catch {
+              // Ignore cleanup errors
+            }
+
+            sendEvent(controller, {
+              stage: "complete",
+              progress: 100,
+              message: "Download complete!",
+              downloadUrl: dataUrl,
+              filename: `${sanitizedTitle}.mp3`,
+            });
+            controller.close();
+            return;
+          }
+
+          // If spotDL failed, try yt-dlp as fallback
+          console.log("spotDL failed, trying yt-dlp fallback...");
+        }
+
         if (useYtDlp) {
-          // Use yt-dlp (preferred method)
+          // Use yt-dlp (fallback if spotDL not available or failed)
           sendEvent(controller, {
             stage: "searching",
             progress: 20,
             message: "Searching for audio on YouTube...",
           });
 
-          let videoId = await searchYouTube(searchQuery);
+          let videoId = await searchYouTube(`${searchQuery} audio`);
 
           if (!videoId) {
             // Try alternative search
