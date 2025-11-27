@@ -1,68 +1,68 @@
 # Spotify Downloader
 
-A Next.js web application for downloading music from Spotify.
+A Next.js web application for downloading music from Spotify, optimized for serverless deployment on Vercel.
 
-## Installation
+## Features
 
-### Prerequisites
+- ✅ **Serverless-Ready**: Works perfectly on Vercel and other serverless platforms
+- ✅ **No System Dependencies**: Pure Node.js solution using youtubei.js
+- ✅ **High-Quality Audio**: Downloads best available audio quality from YouTube
+- ✅ **Real-Time Progress**: Live progress updates during download
+- ✅ **Automatic Fallback**: Tries alternative search queries if initial search fails
+- ✅ **Clean UI**: Modern, responsive interface built with Next.js and Tailwind CSS
 
-This application requires **spotDL** to be installed on your system for the best download experience.
+## Quick Start
 
-#### Install spotDL
-
-**Option 1: Using pip (Recommended)**
+### 1. Install Dependencies
 ```bash
-pip install spotdl
-```
-
-**Option 2: Upgrade existing installation**
-```bash
-pip install --upgrade spotdl
-```
-
-**Option 3: Using pipx (isolated environment)**
-```bash
-pipx install spotdl
-```
-
-#### Install FFmpeg (Required by spotDL)
-
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install ffmpeg
-```
-
-**Windows:**
-Download from [ffmpeg.org](https://ffmpeg.org/download.html) or use:
-```bash
-spotdl --download-ffmpeg
-```
-
-#### Verify Installation
-```bash
-spotdl --version
-```
-
-### Fallback Options
-
-If spotDL is not available, the application will automatically fall back to:
-1. **yt-dlp** (install with `pip install yt-dlp`)
-2. **play-dl** (Node.js library, already included)
-3. **ytdl-core** (Node.js library, already included)
-
-## Development
-
-```bash
-# Install dependencies
 npm install
+```
 
-# Run development server
+### 2. Run Development Server
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 3. Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/spotify-downloader)
+
+Or manually:
+```bash
+npm run build
+vercel deploy
+```
+
+## How It Works
+
+1. **Search**: User searches for Spotify tracks or enters track information
+2. **YouTube Search**: The app searches YouTube for the matching audio
+3. **Download**: Downloads high-quality audio using YouTube's InnerTube API
+4. **Deliver**: Streams the audio file to the user's browser
+
+## Technology Stack
+
+- **Framework**: Next.js 15 with React 19
+- **Styling**: Tailwind CSS with Framer Motion
+- **Audio Download**: youtubei.js (YouTube InnerTube API)
+- **Deployment**: Optimized for Vercel serverless functions
+
+## Why youtubei.js?
+
+This project uses [youtubei.js](https://github.com/LuanRT/YouTube.js) instead of traditional CLI tools like yt-dlp or spotDL because:
+
+- ✅ **Serverless Compatible**: Works in Vercel, Netlify, AWS Lambda, etc.
+- ✅ **No External Dependencies**: Pure JavaScript, no FFmpeg or Python required
+- ✅ **Actively Maintained**: Regular updates to work with YouTube's latest API
+- ✅ **Reliable**: Uses YouTube's official InnerTube API
+- ✅ **Fast**: Direct streaming without temporary files
+
+## Development Scripts
+
+```bash
+# Development mode with hot reload
 npm run dev
 
 # Build for production
@@ -70,26 +70,66 @@ npm run build
 
 # Start production server
 npm start
+
+# Run linter
+npm run lint
 ```
 
-## Usage
+## Deployment Notes
 
-1. Start the development server
-2. Open [http://localhost:3000](http://localhost:3000)
-3. Search for Spotify tracks or playlists
-4. Click download to get your music
+### Vercel Configuration
 
-## Features
+The app works out-of-the-box on Vercel with no special configuration. The download API route is automatically deployed as a serverless function.
 
-- Download individual Spotify tracks
-- Download entire playlists
-- High-quality MP3 output (320kbps with spotDL)
-- Automatic metadata embedding (title, artist, album art)
-- Real-time download progress
-- Multiple fallback methods for reliability
+### Memory Limits
 
-## Download Quality Priority
+For large files, ensure your serverless function has adequate memory:
+- Vercel Pro: Up to 3008 MB
+- Vercel Hobby: 1024 MB (default)
 
-1. **spotDL** - Best quality (320kbps MP3) with full metadata
-2. **yt-dlp** - High quality audio extraction
-3. **play-dl** / **ytdl-core** - Serverless fallback options
+### Timeout Settings
+
+Downloads are designed to complete within Vercel's timeout limits:
+- Vercel Hobby: 10 seconds
+- Vercel Pro: 60 seconds (configurable)
+
+If you need longer timeouts, upgrade to Vercel Pro and configure in `vercel.json`:
+
+```json
+{
+  "functions": {
+    "src/app/api/download/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
+```
+
+## Common Issues
+
+### Downloads Timing Out
+
+If downloads are timing out on Vercel's free tier, consider:
+1. Upgrading to Vercel Pro for longer function execution time
+2. Implementing client-side streaming (work in progress)
+3. Using edge functions for better performance
+
+### Audio Quality
+
+The app downloads the best available audio quality from YouTube. Typical formats:
+- **M4A**: 128-256 kbps AAC (most common)
+- **WEBM**: 128-160 kbps Opus
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is for educational purposes. Users are responsible for complying with copyright laws and YouTube's Terms of Service.
+
+## Acknowledgments
+
+- [youtubei.js](https://github.com/LuanRT/YouTube.js) - YouTube InnerTube API client
+- [Next.js](https://nextjs.org/) - React framework
+- [Vercel](https://vercel.com/) - Hosting platform

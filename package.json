@@ -14,9 +14,8 @@
     "react-dom": "^19.0.0",
     "framer-motion": "^11.11.0",
     "lucide-react": "^0.460.0",
-    "@distube/ytdl-core": "^4.15.1",
-    "jszip": "^3.10.1",
-    "play-dl": "^1.9.7"
+    "youtubei.js": "^10.5.0",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
